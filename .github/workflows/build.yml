@@ -1,0 +1,159 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v3
+
+    - name: Create Android Project Files
+      run: |
+        mkdir -p app/src/main/java/com/banglacall/dialer
+        mkdir -p app/src/main/res/layout
+        mkdir -p app/src/main/res/values
+
+        cat << 'EOF' > settings.gradle
+        include ':app'
+        EOF
+
+        cat << 'EOF' > build.gradle
+        buildscript {
+            repositories { google(); mavenCentral() }
+            dependencies { 
+                classpath 'com.android.tools.build:gradle:8.1.1'
+                classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:1.8.10'
+            }
+        }
+        allprojects { repositories { google(); mavenCentral() } }
+        EOF
+
+        cat << 'EOF' > app/build.gradle
+        plugins {
+            id 'com.android.application'
+            id 'kotlin-android'
+        }
+        android {
+            compileSdk 33
+            namespace 'com.banglacall.dialer'
+            defaultConfig {
+                applicationId "com.banglacall.dialer"
+                minSdk 21
+                targetSdk 33
+                versionCode 1
+                versionName "1.0"
+            }
+        }
+        dependencies {
+            implementation 'androidx.core:core-ktx:1.9.0'
+            implementation 'androidx.appcompat:appcompat:1.6.1'
+            implementation 'com.google.android.material:material:1.8.0'
+        }
+        EOF
+
+        cat << 'EOF' > app/src/main/res/values/styles.xml
+        <resources>
+            <style name="Theme.BanglaCall" parent="Theme.AppCompat.Light.NoActionBar" />
+        </resources>
+        EOF
+
+        cat << 'EOF' > app/src/main/AndroidManifest.xml
+        <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.banglacall.dialer">
+            <uses-permission android:name="android.permission.INTERNET" />
+            <uses-permission android:name="android.permission.CALL_PHONE" />
+            <application android:label="BanglaCall" android:theme="@style/Theme.BanglaCall">
+                <activity android:name=".MainActivity" android:exported="true">
+                    <intent-filter>
+                        <action android:name="android.intent.action.MAIN" />
+                        <category android:name="android.intent.category.LAUNCHER" />
+                    </intent-filter>
+                </activity>
+            </application>
+        </manifest>
+        EOF
+
+        cat << 'EOF' > app/src/main/res/layout/activity_main.xml
+        <?xml version="1.0" encoding="utf-8"?>
+        <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:padding="24dp"
+            android:gravity="center">
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="BanglaCall Dialer"
+                android:textSize="24sp"
+                android:textStyle="bold"
+                android:textColor="#1B5E20"
+                android:layout_marginBottom="24dp"/>
+            <EditText
+                android:id="@+id/etPhoneNumber"
+                android:layout_width="match_parent"
+                android:layout_height="60dp"
+                android:hint="Enter Number"
+                android:textSize="22sp"
+                android:inputType="phone"
+                android:gravity="center"
+                android:layout_marginBottom="20dp"/>
+            <Button
+                android:id="@+id/btnCall"
+                android:layout_width="match_parent"
+                android:layout_height="60dp"
+                android:text="CALL"
+                android:textSize="20sp"
+                android:backgroundTint="#2E7D32"/>
+        </LinearLayout>
+        EOF
+
+        cat << 'EOF' > app/src/main/java/com/banglacall/dialer/MainActivity.kt
+        package com.banglacall.dialer
+        import android.os.Bundle
+        import androidx.appcompat.app.AppCompatActivity
+        import android.widget.Button
+        import android.widget.EditText
+        import android.widget.Toast
+
+        class MainActivity : AppCompatActivity() {
+            override fun onCreate(savedInstanceState: Bundle?) {
+                super.onCreate(savedInstanceState)
+                setContentView(R.layout.activity_main)
+                val etPhone = findViewById<EditText>(R.id.etPhoneNumber)
+                val btnCall = findViewById<Button>(R.id.btnCall)
+                btnCall.setOnClickListener {
+                    val num = etPhone.text.toString()
+                    if (num.isNotEmpty()) {
+                        Toast.makeText(this, "Calling $num via 103.170.231.10...", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        }
+        EOF
+
+    - name: Generate Wrapper & Grant Permission
+      run: |
+        gradle wrapper
+        chmod +x gradlew
+
+    - name: Build Debug APK
+      run: ./gradlew assembleDebug
+
+    - name: Upload APK Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: BanglaCall-Dialer-APK
+        path: app/build/outputs/apk/debug/app-debug.apk
